@@ -23,16 +23,30 @@ work or from any other source except where due acknowledgement is made in the as
 guide for this unit.
 
 
+```{r}
+#load necessary libraries 
+library(dplyr)
+library(tidyverse)
+library(kableExtra)
+library(ggplot2)
+#Load data
+data_users=read.csv("users.csv")
+data_bs=read.csv("businesses.csv")
+data_rv=read_csv("reviews.csv",show_col_types = FALSE)
+```
+
 1. Write the code to analyse the review behaviour across user groups. The users should be grouped into 3 group: Veteran, Intermediate and New (based on their member since date) before 2017, between 2017-2022, and after 2022 respectively. Calculate the numbers of users, their average review stars and average number of reviews per user. Tabulate the data using kable or kableextra. Visualise the Average Review Stars by User Age Group. You are required to make sure you handle the NA value in your analysis. Explain your findings.
 
 Solution:
 
 ```{r}
-library(dplyr)
-library(tidyverse)
-library(kableExtra)
-library(ggplot2)
-data_users=read.csv("users.csv")
+#Summary and the first 10 rows of data_users
+summary(data_users)
+head(data_users)
+```
+
+```{r}
+#Create new field for Veteran, Intermediate, and New
 data_users <- data_users %>%
   mutate(
     users_group = case_when(
@@ -42,27 +56,33 @@ data_users <- data_users %>%
       TRUE ~ NA_character_
     )
   )
-head(data_users)
+```
+
+```{r}
+#Create new dataframe for calculated statistics 
 user_stats <- data_users %>%
   summarise(
-    # Total number of users
+    # Total number of users in the first collumn
     total_users = n_distinct(data_users$user_id),
     
-    # Average review stars per user
+    # Average review stars per user in the second collumn
     avg_review_stars = mean(data_users$average_stars, na.rm = TRUE),
     
-    # Average number of reviews per user
+    # Average number of reviews per user in the third collumn
     avg_reviews_per_user = mean(data_users$review_count, na.rm = TRUE)
   )
+#Change the name of collumns for easy-reading
 colnames(user_stats)=c("Total Users","Average review stars per user","Average number of reviews per user")
 ```
 
 
 ```{r}
-user_stats %>% kbl(caption = "Table for numbers of users and their reviews") %>%  kable_paper("hover",full_width=F,html_font = "Camberia")
+#Set the title for the formated graph with front of Camberia, expanding across paper, hover using to change color in html/ webpage
+user_stats %>% kbl(caption = "Table for numbers of users and their reviews") %>%  kable_classic("hover",full_width=F,html_font = "Camberia")
 ```
 
 ```{r}
+#group avg_review_stars by groups of user
 average_review_bygroup <- data_users %>% 
   group_by(users_group) %>%  
   summarise(
@@ -71,26 +91,24 @@ average_review_bygroup <- data_users %>%
   )
 # Clean and prepare data
 plot_data <- average_review_bygroup %>%
-  filter(
-    !is.na(users_group),
-    !is.na(avg_review_stars),
-    is.numeric(avg_review_stars)
+  filter( #filter out/ collect TRUE value from statement 
+    !is.na(users_group), #filter out NA in users_group
+    !is.na(avg_review_stars),#filter out NA in avg_review_stars
+    is.numeric(avg_review_stars) #checking the structure of the avg_review_stars as numeric
   ) %>%
-  mutate(
+  mutate( #double-checking/add new group of users_group as factor
     users_group = factor(users_group,
                         levels = c("New", "Intermediate", "Veteran"),)
   )
-
-data_min <- min(plot_data$avg_review_stars)
-data_max <- max(plot_data$avg_review_stars)
-y_buffer <- (data_max - data_min) * 0.3  # 30% padding
-barplot(plot_data$avg_review_stars,names.arg = plot_data$users_group,main = "Average Review Stars by User Group",
-        ylab = "Average Stars",
-       ylim = c(data_min - y_buffer, data_max + y_buffer))  # Focused y-axis)
-text(x = 1:nrow(plot_data), 
-     y = plot_data$avg_review_stars,
-     labels = round(plot_data$avg_review_stars, 3),
-     pos = 3, cex = 0.8)
+ggplot(plot_data, aes(x = users_group, y = avg_review_stars)) +
+   geom_col(fill = "black") +
+  geom_text(aes(label = round(avg_review_stars, 2)), vjust = -0.5)+
+  labs(
+    title = "Average Review Stars by User Group",
+    x = "User Group",
+    y = "Average Review Stars"
+  ) +
+  theme_minimal()
 ```
 
 
@@ -104,31 +122,56 @@ Solution:
 
 
 ```{r}
-data_bs=read.csv("businesses.csv")
+#First 10 rows of data_bs
 head(data_bs)
 ```
 ```{r}
-data_by_state=data_bs %>% filter(!is.na(state) & state != "") %>% 
-  group_by(state) %>% 
-  summarise(
+#Create new dataframe for review each state
+data_by_state=data_bs %>% #Filter out NA state and ungiven state
+  filter(!is.na(state) & state != "") %>% 
+  group_by(state) %>% #Group by state
+  summarise(#Return aver_review as a new collumn for mean for each state
   aver_review =mean(business.avg.stars, na.rm=TRUE)
 )
+#First 10 rows of data_by_state
 head(data_by_state)
 ```
 
 ```{r}
-business_stas <-data_bs  %>%
+# Create new dataframe for summary statistics
+business_stats <- data_bs %>%
   summarise(
-    # Total number of users
-    total_business = n_distinct(data_bs$business_id),
+    # Total number of businesses
+    total_business = n_distinct(business_id),
     
-    # Average review stars per user
-    avg_review_stars = mean(data_bs$business.avg.stars, na.rm = TRUE),
+    # Average review stars per business
+    avg_review_stars = mean(business.avg.stars, na.rm = TRUE),
     
-    # Average number of reviews per user
-    num_review = sum(data_bs$review_count, na.rm = TRUE)
+    # Number of reviews of all businesses
+    num_reviews = sum(review_count, na.rm = TRUE)
   )
-head(business_stas)
+
+# Add user count from a separate data_users dataframe
+user_count <- data_users %>%
+  summarise(user_count = n_distinct(user_id))
+
+# Combine the user count with business stats
+business_stats <- business_stats %>%
+  mutate(user_count = user_count$user_count) %>%
+  select(total_business, user_count, avg_review_stars, num_reviews)
+
+# Rename columns
+colnames(business_stats) <- c(
+  "Total number of businesses",
+  "Total number of users",
+  "Average review stars per business",
+  "Total number of reviews"
+)
+
+# Create formatted table
+business_stats %>%
+  kbl(caption = "Table: Summary of Businesses, Users, Review Stars, and Total Reviews") %>%
+  kable_classic("hover", full_width = F, html_font = "Cambria")
 ```
 
 
@@ -145,8 +188,7 @@ ggplot(data_by_state, aes(x = state, y = aver_review,size = aver_review))+geom_p
 
 
 
-3. Write the code to analyse the top users and their behaviours. First, identify the top 10 users by the
-review count. For those top 10 users, calculate their average review stars. Tabulate the summary of
+3. Write the code to analyse the top users and their behaviours. First, identify the top 10 users by the review count. For those top 10 users, calculate their average review stars. Tabulate the summary of
 the data (kable/kableextra). You are required to make sure you handle the NA value in your analysis.
 Visualise their rating distrubtion using ggplot2 - boxplot. Discuss your findings.
 
@@ -183,7 +225,6 @@ head(user_cat)
 
 
 ```{r}
-data_rv=read_csv("reviews.csv",show_col_types = FALSE)
 head(data_rv)
 join_table=data_rv %>% inner_join(user_cat,by="user_id") %>% mutate(review_length=nchar(text)) %>% filter(!is.na(stars),!is.na(review_length))
 
